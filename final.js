@@ -51,6 +51,8 @@ var ang = 0, aX = 0, aY = 0, aZ = 4;
 var g_last = Date.now();
 
 var cubes = [];
+var texture_loaded = [];
+var texture = [];
 
 var m = {
     mMatrix: new Matrix4(),    //modelMatrix
@@ -98,6 +100,7 @@ var xC = new Float32Array([
   0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]);
 
 function main() {
+    texture_loaded[0] = false;
     cubes[0] = {mMatrix:new Matrix4()};
     cubes[1] = {mMatrix:new Matrix4()};
     cubes[2] = {mMatrix:new Matrix4()};
@@ -107,12 +110,14 @@ function main() {
     var gl = getWebGLContext(canvas);
     if (!gl) {console.log('Failed WebGL');return;}
 
+
     var tProg = createProgram(gl, T_VSHD_SRC, T_FSHD_SRC);
     var sProg = createProgram(gl, S_VSHD_SRC, S_FSHD_SRC);
     initProgram(gl, tProg, 1);
     initProgram(gl, sProg, 0);
 
-    var Floor = initFloor(gl);
+    texture[0] = gl.createTexture();
+
     var Cube = initCube(gl);
 
     setStage(gl, sProg, Cube);
@@ -124,14 +129,14 @@ function main() {
     gl.enable(gl.DEPTH_TEST);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
-    if (!initTextures(gl, Floor, tProg)) {console.log('Failed texture.');return;}
+    if (!initTextures(gl, tProg, Cube)) {console.log('Failed texture.');return;}
 
     document.onkeydown = function(ev){
-      keydown(ev, gl, Floor, Cube, tProg, sProg);};
+      keydown(ev);};
 
     var tick = function() {
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-        drawFloor(gl, Floor, tProg);
+        drawTextureCube(gl, Cube, tProg);
         drawCube(gl, Cube, sProg);
         requestAnimationFrame(tick);
     };
@@ -142,6 +147,30 @@ function dTr (rads) {return rads * (Math.PI/180);}
 function mC (ang) {return Math.cos(ang);}
 function mS (ang) {return Math.sin(ang);}
 
+function drawTextureCube(gl, o, program) {
+  gl.useProgram(program);
+
+  initAttributeVariable(gl, program.a_Position, o.vertexBuffer);
+  initAttributeVariable(gl, program.a_Normal, o.normalBuffer);
+  initAttributeVariable(gl, program.a_TexCoord, o.texCoordBuffer);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, o.indexBuffer);
+
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, texture[0]);
+
+  m.vMatrix.setLookAt(gX, gY, gZ, aX, aY, aZ, 0, 1, 0);
+  m.mvpMatrix.set(m.pMatrix).multiply(m.vMatrix).multiply(m.mMatrix);
+  m.nMatrix.setInverseOf(cubes[0].mMatrix);
+  m.nMatrix.transpose();
+  gl.uniformMatrix4fv(program.u_NormalMatrix, false, m.nMatrix.elements);
+  m.mvpMatrix.set(m.pMatrix).multiply(m.vMatrix).multiply(cubes[0].mMatrix);
+  gl.uniformMatrix4fv(program.u_MvpMatrix, false, m.mvpMatrix.elements);
+  gl.drawElements(gl.TRIANGLES, o.numIndices, o.indexBuffer.type, 0);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, null);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+}
+
 function drawCube(gl, o, program) {
     gl.useProgram(program);
     initAttributeVariable(gl, program.a_Position, o.vertexBuffer);
@@ -149,7 +178,7 @@ function drawCube(gl, o, program) {
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, o.indexBuffer);
     m.vMatrix.setLookAt(gX, gY, gZ, aX, aY, aZ, 0, 1, 0);
     m.mvpMatrix.set(m.pMatrix).multiply(m.vMatrix).multiply(m.mMatrix);
-    for (var i = 0; i < cubes.length; i++) {
+    for (var i = 1; i < cubes.length; i++) {
       primeColorBuffer(gl, program, o, i);
       m.nMatrix.setInverseOf(cubes[i].mMatrix);
       m.nMatrix.transpose();
@@ -161,34 +190,19 @@ function drawCube(gl, o, program) {
     gl.bindBuffer(gl.ARRAY_BUFFER, null);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
 }
-function drawFloor(gl, Floor, program) {
-    gl.useProgram(program);
-    m.vMatrix.setLookAt(gX, gY, gZ, aX, aY, aZ, 0, 1, 0);
-    m.mvpMatrix.set(m.pMatrix).multiply(m.vMatrix).multiply(m.mMatrix);
-    gl.uniformMatrix4fv(program.u_MvpMatrix, false, m.mvpMatrix.elements);
-    gl.bindBuffer(gl.ARRAY_BUFFER, Floor.vertexTexCoordBuffer);
-    var FSIZE = Floor.verticesTexCoords.BYTES_PER_ELEMENT;
-    gl.vertexAttribPointer(program.a_Position, 3, gl.FLOAT, false, FSIZE * 5, 0);
-    gl.enableVertexAttribArray(program.a_Position);
-    gl.vertexAttribPointer(program.a_TexCoord, 2, gl.FLOAT, false, FSIZE * 5, FSIZE * 3);
-    gl.enableVertexAttribArray(program.a_TexCoord);
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, Floor.n);
-    gl.bindBuffer(gl.ARRAY_BUFFER, null);
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
-}
-function initTextures(gl, Floor, program) {
-    var texture = gl.createTexture();
-    if (!texture) {console.log('Failed texture object');return false;}
+
+function initTextures(gl, program, o) {
+    if (!texture[0]) {console.log('Failed texture object');return false;}
     var image = new Image();
     if (!image) {console.log('Failed image object');return false;}
-    image.onload = function(){ loadTexture(gl, Floor, program, texture, image); };
+    image.onload = function(){ loadTexture(gl, program, o, image); };
     image.src = './floor.jpg';
     return true;
 }
-function loadTexture(gl, Floor, program, texture, image) {
+function loadTexture(gl, program, o, image) {
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);
     gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.bindTexture(gl.TEXTURE_2D, texture[0]);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, image);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
@@ -196,28 +210,9 @@ function loadTexture(gl, Floor, program, texture, image) {
 
     gl.useProgram(program);
     gl.uniform1i(program.u_Sampler, 0);
-    drawFloor(gl, Floor, program);
+    drawTextureCube(gl, o, program);
 }
-function initFloor(gl) {
-    var o = new Object();
-    o.verticesTexCoords = new Float32Array([
-    -100, -0.5, -100,   0, 1,
-    -100, -0.5,  100,   0, 0,
-     100, -0.5, -100,   1, 1,
-     100, -0.5,  100,   1, 0
-    ]);
-    o.n = 4;
-    o.vertexTexCoordBuffer = gl.createBuffer();
-    if (!o.vertexTexCoordBuffer) {console.log('Failed buff obj');return -1;}
 
-    gl.bindBuffer(gl.ARRAY_BUFFER, o.vertexTexCoordBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, o.verticesTexCoords, gl.STATIC_DRAW);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, null);
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
-
-    return o;
-}
 function initCube(gl) {
     var o = new Object();
     var vertices = new Float32Array([   // Vertex coordinates
@@ -343,7 +338,7 @@ function initProgram(gl, program, i) {
     program.a_Normal = gl.getAttribLocation(program, 'a_Normal');
     program.a_Color = gl.getAttribLocation(program, 'a_Color');}
 }
-function keydown(ev, gl, Floor, Cube, tProg, sProg) {
+function keydown(ev) {
   switch (ev.keyCode) {
     case 37:turnLeft();break;
     case 38:gZ = aZ;gX = aX;aZ = gZ - mC(dTr(ang));aX = gX + mS(dTr(ang));break;
