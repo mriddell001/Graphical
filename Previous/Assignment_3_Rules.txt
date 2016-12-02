@@ -1,0 +1,5 @@
+Goal, stay away from the ghost!
+
+Press the buttons with directions indicated to move in that direction.
+Every second you survive, your score increases by one.
+Once the ghost touches you, you lose!
