@@ -1,21 +1,19 @@
-//WORKING ON ALTERNATE COLOR SYSTEM.
-
 var S_VSHD_SRC =
-'attribute vec4 a_Position;\n' +
-'attribute vec4 a_Color;\n' +
-'attribute vec4 a_Normal;\n' +
-'uniform mat4 u_MvpMatrix;\n' +
-'uniform mat4 u_NormalMatrix;\n' +
-'varying vec4 v_Color;\n' +
-'void main() {\n' +
-'  vec3 lightDirection = vec3(0.5, 1.0, 1.0);\n' +
-'  gl_Position = u_MvpMatrix * a_Position;\n' +
-'  vec3 normal = normalize(vec3(u_NormalMatrix * a_Normal));\n' +
-'  float nDotL = max(dot(normal, lightDirection), 0.0);\n' +
-//'  float nDotL = max(dot(normal, 1.0), 0.0);\n' +
-//'  v_Color = a_Color;\n' +
-'  v_Color = vec4(a_Color.rgb * nDotL, a_Color.a);\n' +
-'}\n';
+  'attribute vec4 a_Position;\n' +
+  'attribute vec4 a_Color;\n' +
+  'attribute vec4 a_Normal;\n' +
+  'uniform mat4 u_MvpMatrix;\n' +
+  'uniform mat4 u_NormalMatrix;\n' +
+  'varying vec4 v_Color;\n' +
+  'void main() {\n' +
+  '  vec3 lightDirection = vec3(0.0, 0.0, 1.0);\n' + // Light direction(World coordinate)
+　'  gl_Position = u_MvpMatrix * a_Position;\n' +
+  '  vec3 normal = normalize(vec3(u_NormalMatrix * a_Normal));\n' +
+  '  float nDotL = max(dot(normal, lightDirection), 0.0);\n' +
+  ' vec3 identity = vec3(1.0, 1.0, 1.0);\n' +
+  '  nDotL = max(dot(normal, identity), 0.0);\n' +
+  '  v_Color = vec4(a_Color.rgb * nDotL, a_Color.a);\n' +
+  '}\n';
 
 var S_FSHD_SRC =
 '#ifdef GL_ES\n' +
@@ -28,11 +26,18 @@ var S_FSHD_SRC =
 
 var T_VSHD_SRC =
 'attribute vec4 a_Position;\n' +
+'attribute vec4 a_Normal;\n' +
 'attribute vec2 a_TexCoord;\n' +
 'uniform mat4 u_MvpMatrix;\n' +
+'uniform mat4 u_NormalMatrix;\n' +
+'varying float v_NdotL;\n' +
 'varying vec2 v_TexCoord;\n' +
 'void main() {\n' +
+'  vec3 lightDirection = vec3(0.0, 0.0, 1.0);\n' + // Light direction(World coordinate)
 '  gl_Position = u_MvpMatrix * a_Position;\n' +
+'  vec3 normal = normalize(vec3(u_NormalMatrix * a_Normal));\n' +
+'  vec3 identity = vec3(1.0, 1.0, 1.0);\n' +
+'  v_NdotL = max(dot(normal, identity), 0.0);\n' +
 '  v_TexCoord = a_TexCoord;\n' +
 '}\n';
 
@@ -42,8 +47,10 @@ var T_FSHD_SRC =
 '#endif\n' +
 'uniform sampler2D u_Sampler;\n' +
 'varying vec2 v_TexCoord;\n' +
+'varying float v_NdotL;\n' +
 'void main() {\n' +
-'  gl_FragColor = texture2D(u_Sampler, v_TexCoord);\n' +
+'  vec4 color = texture2D(u_Sampler, v_TexCoord);\n' +
+'  gl_FragColor = vec4(color.rgb * v_NdotL, color.a);\n' +
 '}\n';
 
 var gX = 0, gY = 0, gZ = 5;
@@ -117,6 +124,7 @@ function main() {
     initProgram(gl, sProg, 0);
 
     texture[0] = gl.createTexture();
+    texture[1] = gl.createTexture();
 
     var Cube = initCube(gl);
 
@@ -125,7 +133,7 @@ function main() {
     m.pMatrix.setPerspective(90, canvas.width/canvas.height, 0.1, 100);
     m.mvpMatrix.set(m.pMatrix).multiply(m.vMatrix).multiply(m.mMatrix);
 
-    gl.clearColor(0.0, 0.0, 0.0, 1.0);
+    gl.clearColor(1.0, 1.0, 1.0, 1.0);
     gl.enable(gl.DEPTH_TEST);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
@@ -143,32 +151,35 @@ function main() {
     tick();
 }
 
-function dTr (rads) {return rads * (Math.PI/180);}
-function mC (ang) {return Math.cos(ang);}
-function mS (ang) {return Math.sin(ang);}
+function drawTextureCube(gl, o, program, i) {
+    gl.useProgram(program);
+    initAttributeVariable(gl, program.a_Position, o.vertexBuffer);
+    initAttributeVariable(gl, program.a_Normal, o.normalBuffer);
+    initAttributeVariable(gl, program.a_TexCoord, o.texCoordBuffer);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, o.indexBuffer);
+    m.vMatrix.setLookAt(gX, gY, gZ, aX, aY, aZ, 0, 1, 0);
+    m.mvpMatrix.set(m.pMatrix).multiply(m.vMatrix).multiply(m.mMatrix);
 
-function drawTextureCube(gl, o, program) {
-  gl.useProgram(program);
 
-  initAttributeVariable(gl, program.a_Position, o.vertexBuffer);
-  initAttributeVariable(gl, program.a_Normal, o.normalBuffer);
-  initAttributeVariable(gl, program.a_TexCoord, o.texCoordBuffer);
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, o.indexBuffer);
+    for (var i = 0; i < 3; i++) {
+      var n = 1;
+      if ((texture_loaded[0] == true) && (texture_loaded[1] == true)) {
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, texture[i]);
 
-  gl.activeTexture(gl.TEXTURE0);
-  gl.bindTexture(gl.TEXTURE_2D, texture[0]);
-
-  m.vMatrix.setLookAt(gX, gY, gZ, aX, aY, aZ, 0, 1, 0);
-  m.mvpMatrix.set(m.pMatrix).multiply(m.vMatrix).multiply(m.mMatrix);
-  m.nMatrix.setInverseOf(cubes[0].mMatrix);
-  m.nMatrix.transpose();
-  gl.uniformMatrix4fv(program.u_NormalMatrix, false, m.nMatrix.elements);
-  m.mvpMatrix.set(m.pMatrix).multiply(m.vMatrix).multiply(cubes[0].mMatrix);
-  gl.uniformMatrix4fv(program.u_MvpMatrix, false, m.mvpMatrix.elements);
-  gl.drawElements(gl.TRIANGLES, o.numIndices, o.indexBuffer.type, 0);
-
-  gl.bindBuffer(gl.ARRAY_BUFFER, null);
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+        m.nMatrix.setInverseOf(cubes[i].mMatrix);
+        m.nMatrix.transpose();
+        gl.uniformMatrix4fv(program.u_NormalMatrix, false, m.nMatrix.elements);
+        m.mvpMatrix.set(m.pMatrix).multiply(m.vMatrix).multiply(cubes[i].mMatrix);
+        gl.uniformMatrix4fv(program.u_MvpMatrix, false, m.mvpMatrix.elements);
+        if(!i) {n = 0;}
+        gl.uniform1i(u_Sampler, n);
+        gl.drawElements(gl.TRIANGLES, o.numIndices, o.indexBuffer.type, 0);
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+        gl.bindTexture(gl.TEXTURE_2D, null);
+      }
+    }
 }
 
 function drawCube(gl, o, program) {
@@ -178,7 +189,7 @@ function drawCube(gl, o, program) {
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, o.indexBuffer);
     m.vMatrix.setLookAt(gX, gY, gZ, aX, aY, aZ, 0, 1, 0);
     m.mvpMatrix.set(m.pMatrix).multiply(m.vMatrix).multiply(m.mMatrix);
-    for (var i = 1; i < cubes.length; i++) {
+    for (var i = 3; i < cubes.length; i++) {
       primeColorBuffer(gl, program, o, i);
       m.nMatrix.setInverseOf(cubes[i].mMatrix);
       m.nMatrix.transpose();
@@ -192,27 +203,120 @@ function drawCube(gl, o, program) {
 }
 
 function initTextures(gl, program, o) {
-    if (!texture[0]) {console.log('Failed texture object');return false;}
-    var image = new Image();
-    if (!image) {console.log('Failed image object');return false;}
-    image.onload = function(){ loadTexture(gl, program, o, image); };
-    image.src = './floor.jpg';
+    gl.useProgram(program);
+    var img0 = new Image();
+    var img1 = new Image();
+    img0.onload = function(){
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, texture[0]);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img0);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.uniform1i(program.u_Sampler, 0);
+      //gl.bindTexture(gl.TEXTURE_2D, null);
+      texture_loaded[0] = true;
+    };
+    img0.onload = function(){
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, texture[1]);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img1);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.uniform1i(program.u_Sampler, 0);
+      //gl.bindTexture(gl.TEXTURE_2D, null);
+      texture_loaded[1] = true;
+    };
+    img0.src = './floor.jpg';
+    img1.src = './stage.jpg';
     return true;
 }
-function loadTexture(gl, program, o, image) {
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, texture[0]);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, image);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-
-    gl.useProgram(program);
-    gl.uniform1i(program.u_Sampler, 0);
-    drawTextureCube(gl, o, program);
+function initLaterBuffer(gl, data, num, type) {
+  var buffer = gl.createBuffer();   // Create a buffer object
+  if (!buffer) {console.log('Failed buffer object');return null;}
+  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+  gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+  buffer.num = num;
+  buffer.type = type;
+  return buffer;
 }
+function initAttributeVariable(gl, a_attribute, buffer) {
+  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+  gl.vertexAttribPointer(a_attribute, buffer.num, buffer.type, false, 0, 0);
+  gl.enableVertexAttribArray(a_attribute);
+}
+function initArrayBufferForLaterUse(gl, data, num, type) {
+  var buffer = gl.createBuffer();   // Create a buffer object
+  if (!buffer) {console.log('Failed buffer object');return null;}
+  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+  gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+  buffer.num = num;
+  buffer.type = type;
+  return buffer;
+}
+function initElementArrayBufferForLaterUse(gl, data, type) {
+  var buffer = gl.createBuffer();　  // Create a buffer object
+  if (!buffer) {console.log('Failed buffer object');return null;}
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffer);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, data, gl.STATIC_DRAW);
+  buffer.type = type;
+  return buffer;
+}
+function primeColorBuffer(gl, program, o, index) {
+  switch (index) {
+    //case 0:o.colorBuffer = initLaterBuffer(gl, gC, 3, gl.FLOAT);break;
+    case 1:o.colorBuffer = initLaterBuffer(gl, stageColor, 3, gl.FLOAT);break;
+    case 2:o.colorBuffer = initLaterBuffer(gl, stageColor, 3, gl.FLOAT);break;
+    case 3:o.colorBuffer = initLaterBuffer(gl, xC, 3, gl.FLOAT);break;
+    case 4:o.colorBuffer = initLaterBuffer(gl, o.colors, 3, gl.FLOAT);break;
+    default:break;
+  }
+  initAttributeVariable(gl, program.a_Color, o.colorBuffer);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, o.indexBuffer);
+}
+function setStage(gl, program, Cube) {
+    cubes[0].mMatrix.translate(0, -2, 0);
+    cubes[0].mMatrix.scale(100, 0.1, 100);
 
+    cubes[1].mMatrix.translate(0,4.5,-7);
+    cubes[1].mMatrix.scale(10, 5, 0.1);
+
+    cubes[2].mMatrix.translate(0,-0.5,-6);
+    cubes[2].mMatrix.scale(10, 0.5, 1);
+
+    cubes[3].mMatrix.translate(0, -10, 0);
+    cubes[3].mMatrix.scale(30, 20, 20);
+
+    cubes[4].mMatrix.translate(0, -1.2, 0);
+    cubes[4].mMatrix.scale(1, 1, 1);
+}
+function initProgram(gl, program, i) {
+  program.a_Position = gl.getAttribLocation(program, 'a_Position');
+  program.a_Normal = gl.getAttribLocation(program, 'a_Normal');
+
+  program.u_MvpMatrix = gl.getUniformLocation(program, 'u_MvpMatrix');
+  program.u_NormalMatrix = gl.getUniformLocation(program, 'u_NormalMatrix');
+  if (i) {
+    program.a_TexCoord = gl.getAttribLocation(program, 'a_TexCoord');
+    program.u_Sampler = gl.getUniformLocation(program, 'u_Sampler');
+  }
+  else {
+    program.a_Color = gl.getAttribLocation(program, 'a_Color');}
+}
+function keydown(ev) {
+  switch (ev.keyCode) {
+    case 37:turnLeft();break;
+    case 38:gZ = aZ;gX = aX;aZ = gZ - mC(dTr(ang));aX = gX + mS(dTr(ang));break;
+    case 39:ang = (ang + 2)%360;aZ=(gZ-mC(dTr(ang)));aX=(gX+mS(dTr(ang)));break;
+    case 40:reverse();break;
+    case 87:aX=9.588586356746424;aZ=-6.831593677398255;gX=10.587977183765519;gZ=-6.866493174100755;break;
+    default:break;
+  }
+  //console.log("aX: " + aX + " aZ: " + aZ + " gX: " + gX + " gZ: " + gZ);
+}
 function initCube(gl) {
     var o = new Object();
     var vertices = new Float32Array([   // Vertex coordinates
@@ -267,88 +371,6 @@ function initCube(gl) {
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
     return o;
 }
-function initLaterBuffer(gl, data, num, type) {
-  var buffer = gl.createBuffer();   // Create a buffer object
-  if (!buffer) {console.log('Failed buffer object');return null;}
-  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-  gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
-  buffer.num = num;
-  buffer.type = type;
-  return buffer;
-}
-function initAttributeVariable(gl, a_attribute, buffer) {
-  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-  gl.vertexAttribPointer(a_attribute, buffer.num, buffer.type, false, 0, 0);
-  gl.enableVertexAttribArray(a_attribute);
-}
-function initArrayBufferForLaterUse(gl, data, num, type) {
-  var buffer = gl.createBuffer();   // Create a buffer object
-  if (!buffer) {console.log('Failed buffer object');return null;}
-  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-  gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
-  buffer.num = num;
-  buffer.type = type;
-  return buffer;
-}
-function initElementArrayBufferForLaterUse(gl, data, type) {
-  var buffer = gl.createBuffer();　  // Create a buffer object
-  if (!buffer) {console.log('Failed buffer object');return null;}
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffer);
-  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, data, gl.STATIC_DRAW);
-  buffer.type = type;
-  return buffer;
-}
-function primeColorBuffer(gl, program, o, index) {
-  switch (index) {
-    case 0:o.colorBuffer = initLaterBuffer(gl, gC, 3, gl.FLOAT);break;
-    case 1:o.colorBuffer = initLaterBuffer(gl, stageColor, 3, gl.FLOAT);break;
-    case 2:o.colorBuffer = initLaterBuffer(gl, stageColor, 3, gl.FLOAT);break;
-    case 3:o.colorBuffer = initLaterBuffer(gl, xC, 3, gl.FLOAT);break;
-    case 4:o.colorBuffer = initLaterBuffer(gl, o.colors, 3, gl.FLOAT);break;
-    default:break;
-  }
-  initAttributeVariable(gl, program.a_Color, o.colorBuffer);
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, o.indexBuffer);
-}
-function setStage(gl, program, Cube) {
-    cubes[0].mMatrix.translate(0, -0.5, 0);
-    cubes[0].mMatrix.scale(100, 0.1, 100);
-
-    cubes[1].mMatrix.translate(0,4.5,-7);
-    cubes[1].mMatrix.scale(10, 5, 0.1);
-
-    cubes[2].mMatrix.translate(0,-0.5,-6);
-    cubes[2].mMatrix.scale(10, 0.5, 1);
-
-    cubes[3].mMatrix.translate(0, 0, 5);
-    cubes[3].mMatrix.scale(15, 20, 15);
-
-    cubes[4].mMatrix.translate(0, -1.2, 0);
-    cubes[4].mMatrix.scale(1, 1, 1);
-}
-function initProgram(gl, program, i) {
-  program.a_Position = gl.getAttribLocation(program, 'a_Position');
-  program.u_MvpMatrix = gl.getUniformLocation(program, 'u_MvpMatrix');
-  if (i) {
-    program.a_TexCoord = gl.getAttribLocation(program, 'a_TexCoord');
-    program.u_Sampler = gl.getUniformLocation(program, 'u_Sampler');
-  }
-  else {
-    program.u_NormalMatrix = gl.getUniformLocation(program, 'u_NormalMatrix');
-    program.a_Normal = gl.getAttribLocation(program, 'a_Normal');
-    program.a_Color = gl.getAttribLocation(program, 'a_Color');}
-}
-function keydown(ev) {
-  switch (ev.keyCode) {
-    case 37:turnLeft();break;
-    case 38:gZ = aZ;gX = aX;aZ = gZ - mC(dTr(ang));aX = gX + mS(dTr(ang));break;
-    case 39:ang = (ang + 2)%360;aZ=(gZ-mC(dTr(ang)));aX=(gX+mS(dTr(ang)));break;
-    case 40:reverse();break;
-    case 87:aX=9.588586356746424;aZ=-6.831593677398255;gX=10.587977183765519;gZ=-6.866493174100755;break;
-    default:break;
-  }
-  //console.log("aX: " + aX + " aZ: " + aZ + " gX: " + gX + " gZ: " + gZ);
-}
 function turnLeft() {
     if (ang == 0) {ang = 358;}
     else {ang = (ang -2);}
@@ -362,3 +384,6 @@ function reverse() {
     rZ = gZ - mC(dTr((ang+180)%360));rX = gX + mS(dTr((ang+180)%360));
     gZ = rZ;gX = rX;aZ = gZ - mC(dTr(ang));aX = gX + mS(dTr(ang));
 }
+function dTr (rads) {return rads * (Math.PI/180);}
+function mC (ang) {return Math.cos(ang);}
+function mS (ang) {return Math.sin(ang);}
