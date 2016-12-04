@@ -7,12 +7,13 @@ var S_VSHD_SRC =
   'varying vec4 v_Color;\n' +
   'void main() {\n' +
   '  vec3 lightDirection = vec3(0.0, 0.0, 1.0);\n' + // Light direction(World coordinate)
+  '  vec3 ambientLight = vec3(0.1, 0.1, 0.1);\n' +
 　'  gl_Position = u_MvpMatrix * a_Position;\n' +
   '  vec3 normal = normalize(vec3(u_NormalMatrix * a_Normal));\n' +
   '  float nDotL = max(dot(normal, lightDirection), 0.0);\n' +
-  ' vec3 identity = vec3(1.0, 1.0, 1.0);\n' +
+  '  vec3 identity = vec3(1.0, 1.0, 1.0);\n' +
   '  nDotL = max(dot(normal, identity), 0.0);\n' +
-  '  v_Color = vec4(a_Color.rgb * nDotL, a_Color.a);\n' +
+  '  v_Color = vec4(ambientLight + (a_Color.rgb * nDotL), a_Color.a);\n' +
   '}\n';
 
 var S_FSHD_SRC =
@@ -33,7 +34,7 @@ var T_VSHD_SRC =
 'varying float v_NdotL;\n' +
 'varying vec2 v_TexCoord;\n' +
 'void main() {\n' +
-'  vec3 lightDirection = vec3(0.0, 0.0, 1.0);\n' + // Light direction(World coordinate)
+//'  vec3 lightDirection = vec3(0.0, 0.0, 1.0);\n' + // Light direction(World coordinate)
 '  gl_Position = u_MvpMatrix * a_Position;\n' +
 '  vec3 normal = normalize(vec3(u_NormalMatrix * a_Normal));\n' +
 '  vec3 identity = vec3(1.0, 1.0, 1.0);\n' +
@@ -59,7 +60,7 @@ var g_last = Date.now();
 
 var cubes = [];
 var texture_loaded = [];
-var texture = [];
+var texture;
 
 var m = {
     mMatrix: new Matrix4(),    //modelMatrix
@@ -78,33 +79,13 @@ var stageColor = new Float32Array([
   0.39,0.26,0.13,0.39,0.26,0.13,0.39,0.26,0.13,0.39,0.26,0.13
 ]);
 
-var rC = new Float32Array([
-  1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,
-  0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,
-  0,1,0,0,1,0,0]);
-var bC = new Float32Array([
-  0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,
-  1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,
-  1,0,0,1,0,0,1]);
-var gC = new Float32Array([
-  0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,
-  0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,
-  0,0,1,0,0,1,0]);
-var yC = new Float32Array([
-  1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,
-  0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,
-  0,1,1,0,1,1,0]);
-var pC = new Float32Array([
-  1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,
-  1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,
-  1,1,0,1,1,0,1]);
-var qC = new Float32Array([
-  0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,
-  0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,
-  0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5]);
-var xC = new Float32Array([
-  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]);
+var rC = new Float32Array([1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0]);
+var bC = new Float32Array([0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1]);
+var gC = new Float32Array([0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0]);
+var yC = new Float32Array([1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0]);
+var pC = new Float32Array([1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1]);
+var qC = new Float32Array([0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5]);
+var xC = new Float32Array([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]);
 
 function main() {
     texture_loaded[0] = false;
@@ -117,15 +98,11 @@ function main() {
     var gl = getWebGLContext(canvas);
     if (!gl) {console.log('Failed WebGL');return;}
 
-
     var tProg = createProgram(gl, T_VSHD_SRC, T_FSHD_SRC);
     var sProg = createProgram(gl, S_VSHD_SRC, S_FSHD_SRC);
     initProgram(gl, tProg, 1);
     initProgram(gl, sProg, 0);
-
-    texture[0] = gl.createTexture();
-    texture[1] = gl.createTexture();
-
+    texture = gl.createTexture();
     var Cube = initCube(gl);
 
     setStage(gl, sProg, Cube);
@@ -160,28 +137,21 @@ function drawTextureCube(gl, o, program, i) {
     m.vMatrix.setLookAt(gX, gY, gZ, aX, aY, aZ, 0, 1, 0);
     m.mvpMatrix.set(m.pMatrix).multiply(m.vMatrix).multiply(m.mMatrix);
 
-
-    for (var i = 0; i < 3; i++) {
-      var n = 1;
-      if ((texture_loaded[0] == true) && (texture_loaded[1] == true)) {
-        gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, texture[i]);
-
-        m.nMatrix.setInverseOf(cubes[i].mMatrix);
-        m.nMatrix.transpose();
-        gl.uniformMatrix4fv(program.u_NormalMatrix, false, m.nMatrix.elements);
-        m.mvpMatrix.set(m.pMatrix).multiply(m.vMatrix).multiply(cubes[i].mMatrix);
-        gl.uniformMatrix4fv(program.u_MvpMatrix, false, m.mvpMatrix.elements);
-        if(!i) {n = 0;}
-        gl.uniform1i(u_Sampler, n);
-        gl.drawElements(gl.TRIANGLES, o.numIndices, o.indexBuffer.type, 0);
-        gl.bindBuffer(gl.ARRAY_BUFFER, null);
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
-        gl.bindTexture(gl.TEXTURE_2D, null);
-      }
+    if (texture_loaded[0] == true) {
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      m.nMatrix.setInverseOf(cubes[0].mMatrix);
+      m.nMatrix.transpose();
+      gl.uniformMatrix4fv(program.u_NormalMatrix, false, m.nMatrix.elements);
+      m.mvpMatrix.set(m.pMatrix).multiply(m.vMatrix).multiply(cubes[0].mMatrix);
+      gl.uniformMatrix4fv(program.u_MvpMatrix, false, m.mvpMatrix.elements);
+      gl.uniform1i(program.u_Sampler, 0);
+      gl.drawElements(gl.TRIANGLES, o.numIndices, o.indexBuffer.type, 0);
+      gl.bindBuffer(gl.ARRAY_BUFFER, null);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+      gl.bindTexture(gl.TEXTURE_2D, null);
     }
 }
-
 function drawCube(gl, o, program) {
     gl.useProgram(program);
     initAttributeVariable(gl, program.a_Position, o.vertexBuffer);
@@ -189,7 +159,7 @@ function drawCube(gl, o, program) {
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, o.indexBuffer);
     m.vMatrix.setLookAt(gX, gY, gZ, aX, aY, aZ, 0, 1, 0);
     m.mvpMatrix.set(m.pMatrix).multiply(m.vMatrix).multiply(m.mMatrix);
-    for (var i = 3; i < cubes.length; i++) {
+    for (var i = 1; i < cubes.length; i++) {
       primeColorBuffer(gl, program, o, i);
       m.nMatrix.setInverseOf(cubes[i].mMatrix);
       m.nMatrix.transpose();
@@ -204,34 +174,21 @@ function drawCube(gl, o, program) {
 
 function initTextures(gl, program, o) {
     gl.useProgram(program);
-    var img0 = new Image();
-    var img1 = new Image();
-    img0.onload = function(){
+    var img = new Image();
+    img.onload = function(){
+      gl.useProgram(program);
       gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);
       gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, texture[0]);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img0);
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
       gl.uniform1i(program.u_Sampler, 0);
-      //gl.bindTexture(gl.TEXTURE_2D, null);
+      gl.bindTexture(gl.TEXTURE_2D, null);
       texture_loaded[0] = true;
     };
-    img0.onload = function(){
-      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);
-      gl.activeTexture(gl.TEXTURE1);
-      gl.bindTexture(gl.TEXTURE_2D, texture[1]);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img1);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-      gl.uniform1i(program.u_Sampler, 0);
-      //gl.bindTexture(gl.TEXTURE_2D, null);
-      texture_loaded[1] = true;
-    };
-    img0.src = './floor.jpg';
-    img1.src = './stage.jpg';
+    img.src = './floor.jpg';
     return true;
 }
 function initLaterBuffer(gl, data, num, type) {
@@ -279,7 +236,7 @@ function primeColorBuffer(gl, program, o, index) {
 }
 function setStage(gl, program, Cube) {
     cubes[0].mMatrix.translate(0, -2, 0);
-    cubes[0].mMatrix.scale(100, 0.1, 100);
+    cubes[0].mMatrix.scale(20, 0.1, 20);
 
     cubes[1].mMatrix.translate(0,4.5,-7);
     cubes[1].mMatrix.scale(10, 5, 0.1);
@@ -288,7 +245,7 @@ function setStage(gl, program, Cube) {
     cubes[2].mMatrix.scale(10, 0.5, 1);
 
     cubes[3].mMatrix.translate(0, -10, 0);
-    cubes[3].mMatrix.scale(30, 20, 20);
+    cubes[3].mMatrix.scale(20, 20, 20);
 
     cubes[4].mMatrix.translate(0, -1.2, 0);
     cubes[4].mMatrix.scale(1, 1, 1);
