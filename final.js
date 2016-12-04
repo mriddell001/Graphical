@@ -6,7 +6,7 @@ var S_VSHD_SRC =
   'uniform mat4 u_NormalMatrix;\n' +
   'varying vec4 v_Color;\n' +
   'void main() {\n' +
-  '  vec3 lightDirection = vec3(0.0, 0.0, 1.0);\n' + // Light direction(World coordinate)
+  '  vec3 lightDirection = vec3(0.0, 0.0, 1.0);\n' +
   '  vec3 ambientLight = vec3(0.1, 0.1, 0.1);\n' +
 　'  gl_Position = u_MvpMatrix * a_Position;\n' +
   '  vec3 normal = normalize(vec3(u_NormalMatrix * a_Normal));\n' +
@@ -21,7 +21,16 @@ var S_FSHD_SRC =
 'precision mediump float;\n' +
 '#endif\n' +
 'varying vec4 v_Color;\n' +
+/*'uniform vec3 uLightColor[2];\n' +
+'uniform vec3 uLightDirection[2];\n' +
+'uniform bool uLightIsDirectional[2];\n' +*/
 'void main() {\n' +
+/*'  vec3 reflectedLightColor;\n' +
+'  for(int i = 0; i < 2; i++) {\n' +
+'     vec3 lightDirection = normalize(uLightPosition[i], vPosition.xyz);\n' +
+'     reflectedLightColor += max(dot(vTransformedNormal, uLightDirection[i]), 0.0) * uLightColor[i];\n' +
+'  }\n' +
+'  glFragColor = vec4(uAmbientColor + reflectedLightColor * vColor, 1.0);\n' +*/
 '  gl_FragColor = v_Color;\n' +
 '}\n';
 
@@ -34,7 +43,6 @@ var T_VSHD_SRC =
 'varying float v_NdotL;\n' +
 'varying vec2 v_TexCoord;\n' +
 'void main() {\n' +
-//'  vec3 lightDirection = vec3(0.0, 0.0, 1.0);\n' + // Light direction(World coordinate)
 '  gl_Position = u_MvpMatrix * a_Position;\n' +
 '  vec3 normal = normalize(vec3(u_NormalMatrix * a_Normal));\n' +
 '  vec3 identity = vec3(1.0, 1.0, 1.0);\n' +
